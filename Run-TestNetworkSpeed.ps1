@@ -182,7 +182,7 @@ $RunBank = New-Object psobject @{}
 $Paths = 
 "\\path1",
 "\\path2",
-"\\path3"
+"\\path3",
 "\\path4"
 
 # Define CSV file for logging each speed test run
