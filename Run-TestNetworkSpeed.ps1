@@ -13,17 +13,17 @@
 $SourceServer = hostname
 Write-Warning "Hostname is $SourceServer"
 
+$SharePath = "\\path\to\share\"
+
 # Check for a lockfile, to avoid more than one speed test at one time. If lockfile is detected, terminate script.
 # This is not needed if only one test is run in the environment.
-$LockFileCheck = (Get-ChildItem "\\path\" -Recurse -Filter "*.lockfile").Name
+$LockFileCheck = (Get-ChildItem "$SharePath" -Recurse -Filter "*.lockfile").Name
 if ($LockFileCheck) {
     Write-Warning "Lockfile $LockFileCheck detected. Terminating script!"
-    exit
+    #exit
 }
 # Create lockfile
-Write-Warning "Creating lockfile for $SourceServer at $(Get-Date)" | Out-File "\\path\$SourceServer.lockfile" -Force
-
-## Function definition
+Write-Warning "Creating lockfile for $SourceServer at $(Get-Date)" | Out-File "$SharePath\$SourceServer.lockfile" -Force
 
 
 function Generate-RandomData {
@@ -59,87 +59,72 @@ function Generate-RandomData {
 
     [CmdletBinding()] 
     Param( 
-        [String] $TargetPath = $((Get-Location).Path), 
-        [int64] $minfilesize = 512MB, 
-        [int64] $maxfilesize = 512MB, 
-        [int64] $totalsize = 512MB, 
-        [int] $timerangehours = 24 
+        [String] $TargetPath = "", 
+        [int64] $filesize = 512MB, 
+        [int] $timerangehours = 0 
         #[string] $filenameseed = "abcdefghijkl012345"    
     ) 
  
     # 
     # convert to absolute path as required by WriteAllBytes, and check existence of the directory.  
     # 
-    if (-not (Split-Path -IsAbsolute $TargetPath)) 
-    { 
-        $TargetPath = Join-Path (Get-Location).Path $TargetPath 
-    } 
-    if (-not (Test-Path -Path $TargetPath -PathType Container )) 
-    { 
-        throw "TargetPath '$TargetPath' does not exist or is not a directory" 
-    } 
+    #if (-not (Split-Path -IsAbsolute $TargetPath)) 
+    #{ 
+    #    $TargetPath = Join-Path (Get-Location).Path $TargetPath 
+    #} 
+    #if (-not (Test-Path -Path $TargetPath -PathType Container )) 
+    #{ 
+    #    throw "TargetPath '$TargetPath' does not exist or is not a directory" 
+    #} 
  
     $currentsize = [int64]0 
     $currentime = Get-Date 
-    while ($currentsize -lt $totalsize) 
-    { 
-        # 
-        # generate a random file size. Do the smart thing if min==max. Do not exceed the specified total size.  
-        # 
-        if ($minfilesize -lt $maxfilesize)  
-        { 
-            $filesize = Get-Random -Minimum $minfilesize -Maximum $maxfilesize 
-        } else { 
-            $filesize = $maxfilesize 
-        } 
-        if ($currentsize + $filesize -gt $totalsize) { 
-            $filesize = $totalsize - $currentsize 
-        } 
-        $currentsize += $filesize 
  
-        # 
-        # use a very fast .NET random generator 
-        # 
-        $data = new-object byte[] $filesize 
-        (new-object Random).NextBytes($data) 
+    # 
+    # use a very fast .NET random generator 
+    # 
+    $data = new-object byte[] $filesize 
+    (new-object Random).NextBytes($data) 
      
-        # 
-        # generate a random file name by shuffling the input filename seed.  
-        # 
-        #$filename = ($filenameseed.ToCharArray() | Get-Random -Count ($filenameseed.Length)) -join '' 
-        $filename = "test"
-        $path = Join-Path $TargetPath "$($filename).txt" 
+    # 
+    # generate a random file name by shuffling the input filename seed.  
+    # 
+    #$filename = ($filenameseed.ToCharArray() | Get-Random -Count ($filenameseed.Length)) -join '' 
+    $filename = "test"
+    Write-Verbose "TargetPath = $TargetPath"
+    ##$path_gen = Join-Path $TargetPath "$($filename).txt" 
  
-        # 
-        # write the binary data, and randomize the timestamps as required.  
-        # 
-        try 
+    # 
+    # write the binary data, and randomize the timestamps as required.  
+    # 
+    try 
+    { 
+        [IO.File]::WriteAllBytes($TargetPath, $data) 
+        if ($timerangehours -gt 0) 
         { 
-            [IO.File]::WriteAllBytes($path, $data) 
-            if ($timerangehours -gt 0) 
-            { 
-                $timestamp = $currentime.AddHours(-1 * (Get-Random -Minimum 0 -Maximum $timerangehours)) 
-            } else { 
-                $timestamp = $currentime 
-            } 
-            $fileobject = Get-Item -Path $path 
-            $fileobject.CreationTime = $timestamp 
-            $fileobject.LastWriteTime = $timestamp 
+            $timestamp = $currentime.AddHours(-1 * (Get-Random -Minimum 0 -Maximum $timerangehours)) 
+        } else { 
+            $timestamp = $currentime 
+        } 
+        $fileobject = Get-Item -Path $TargetPath 
+        $fileobject.CreationTime = $timestamp 
+        $fileobject.LastWriteTime = $timestamp 
  
-            # show what we did.  
-            [pscustomobject] @{ 
-                filename = $path 
-                timestamp = $timestamp 
-                datasize = $filesize 
-            } 
-        } catch { 
-            $message = "failed to write data to $path, error $($_.Exception.Message)" 
-            Throw $message 
-        }     
-    } 
+        # show what we did.  
+        [pscustomobject] @{ 
+            filename = $path_gen 
+            timestamp = $timestamp 
+            datasize = $filesize 
+        } 
+    } catch { 
+        $message = "failed to write data to $TargetPath, error $($_.Exception.Message)" 
+        Throw $message 
+    }      
 
 }
 
+
+## Function definition
 function Test-NetworkSpeed {
     <#
     .SYNOPSIS
@@ -183,32 +168,35 @@ function Test-NetworkSpeed {
     [CmdletBinding()]
     Param (
         [Parameter(Mandatory,ValueFromPipeline,HelpMessage="Enter UNC's to server to test (dummy file will be saved in this path)")]
-        [String[]]$Path,
-        [ValidateRange(1,1000)]
-        [int]$Size = 10
+        [String[]]$Path
+        #[ValidateRange(1,1000)]
+        #[int]$Size = 10,
+        #[String[]]$SharePath
     )
 
     Begin {
         Write-Verbose "$(Get-Date): Test-NetworkSpeed Script begins"
         Write-Verbose "$(Get-Date): Create dummy file, Size: $($Size)MB"
-        $Source = $PSScriptRoot
-        Remove-Item $Source\Test.txt -ErrorAction SilentlyContinue
+        $Source = "c:\temp"
+        Remove-Item $Source\Test.txt -ErrorAction SilentlyContinue -Force
         Set-Location $Source
-        $DummySize = $Size * 1048576
-        $CreateMsg = Generate-RandomData -TargetPath $Source
-
+        #$DummySize = $Size * 1048576
+        $CreateMsg = Generate-RandomData -TargetPath "$Source\test.txt"
+        #$CreateMsg = fsutil file createnew test.txt $DummySize
+        
+        # See if data file exists
         Try {
-            $TotalSize = (Get-ChildItem $Source\Test.txt -ErrorAction Stop).Length
+            $TotalSize = (Get-ChildItem $Source\test.txt -ErrorAction Stop).Length
         }
         Catch {
             Write-Warning "Unable to locate dummy file"
             Write-Warning "Create Message: $CreateMsg"
             Write-Warning "Last error: $($Error[0])"
             # !important Remove lock file on exit
-            Remove-Item -Path "\\path\$SourceServer.lockfile" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$Path\$SourceServer.lockfile" -Force -ErrorAction SilentlyContinue
             Exit
         }
-        Write-Verbose "$(Get-Date): Source for dummy file: $Source\Test.txt"
+        Write-Verbose "$(Get-Date): Source for dummy file: $Source\test.txt"
         $RunTime = Get-Date
     }
 
@@ -239,17 +227,24 @@ function Test-NetworkSpeed {
                     Continue
                 }
             }
-        
+            
             Try {
+                
+                # Write test
                 Write-Verbose "$(Get-Date): Write Test..."
                 $WriteTest = Measure-Command { 
                     Copy-Item $Source\Test.txt $Target -ErrorAction Stop
                 }
-            
+                Remove-Item $Target\Test.txt -ErrorAction SilentlyContinue
+                # Read test
                 Write-Verbose "$(Get-Date): Read Test..."
+                # Identify data file from target to copy
+                $RandomFile = Get-ChildItem -Path "$Target\data\*.bin" | Select-Object -First 1
+                Write-Verbose "Random file selected: $RandomFile"
                 $ReadTest = Measure-Command {
-                    Copy-Item $Target\Test.txt $Source\TestRead.txt -ErrorAction Stop
+                    Copy-Item $RandomFile $Source\TestRead.txt -ErrorAction Stop
                 }
+                Remove-Item $RandomFile -ErrorAction SilentlyContinue -Force
                 $Status = "OK"
                 $WriteMbps = [Math]::Round((($TotalSize * 8) / $WriteTest.TotalSeconds) / 1048576,2)
                 $ReadMbps = [Math]::Round((($TotalSize * 8) / $ReadTest.TotalSeconds) / 1048576,2)
@@ -272,7 +267,7 @@ function Test-NetworkSpeed {
                 SourceServer = $SourceServer
                 Size = $Size
             }
-            Remove-Item $Target\Test.txt -ErrorAction SilentlyContinue
+            
             Remove-Item $Source\TestRead.txt -ErrorAction SilentlyContinue
             return $Output
         }
@@ -290,19 +285,16 @@ function Test-NetworkSpeed {
 $RunTimes = 2
 
 # Where to email the report to after test is complete
-$Recpients = @('email@test.com', 'email2.test.com')
+#$Recpients = @('email@test.com', 'email2.test.com')
 
 # RunBank array will store each run of each test, output is a table when done
 $RunBank = New-Object psobject @{}
 # Define each path to test
 $Paths = 
-"\\path1",
-"\\path2",
-"\\path3"
-"\\path4"
+"$SharePath"
 
 # Define CSV file for logging each speed test run
-$LogCsv = "\\path\NetworkSpeedTests.csv"
+$LogCsv = "$SharePath\NetworkSpeedTests.csv"
 # Define size (in MB) of each speed test
 $size = 512
 
@@ -315,13 +307,16 @@ if (!(Test-Path $LogCsv)) {
 for ($i=1; $i -le $RunTimes; $i++) {
     foreach ($path in $Paths) {
         # Speed test action
-        $TestRun = Test-NetworkSpeed -Path $path -Size $size -Verbose
+        $TestRun = Test-NetworkSpeed -Path $path -Verbose
         # Append data to CSV file
         $TestRun | Export-Csv -Path $LogCsv -Append -NoTypeInformation
         # Add test results to $RunBank array
         [array]$RunBank += $TestRun
     }
 }
+
+# Append data to CSV file
+#$RunBank | select Server, TimeStamp, WriteMbps, ReadMbps, SourceServer, Size | Export-Csv -Path $LogCsv -NoTypeInformation -Force -Append
 
 ## HTML formatting/email creation
 $table = $RunBank | select Server, TimeStamp, WriteMbps, ReadMbps, SourceServer, Size | ConvertTo-Html -Fragment
@@ -345,10 +340,10 @@ table { width: 95%; margin-left: 5px; margin-bottom: 20px; }
 "@
 
 # Formulate email body
-[string]$emailBody = ConvertTo-Html -Head $Head -Body $table #| Out-File "\\path\report.htm" -Encoding ascii -Force
+[string]$emailBody = ConvertTo-Html -Head $Head -Body $table | Out-File "$SharePath\report.htm" -Encoding ascii -Force
 
 # Send email - make sure to populate "From" and "SmtpServer" fields
-Send-MailMessage -BodyAsHtml -From "noreply@test.com" -Subject $Title -Body $emailBody -To $Recpients -SmtpServer "mail.test.com"
+#Send-MailMessage -BodyAsHtml -From "noreply@test.com" -Subject $Title -Body $emailBody -To $Recpients -SmtpServer "mail.test.com"
 
 # !important Remove lock file on exit
-Remove-Item -Path "\\path\$SourceServer.lockfile" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$SharePath\$SourceServer.lockfile" -Force -ErrorAction SilentlyContinue
