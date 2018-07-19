@@ -5,7 +5,7 @@
 ## This script will run the function Test-NetworkSpeed against a list of paths and append the results 
 ## to a CSV file, save the output as a nicely formatted HTML table and email the results to listed recipients.
 ## 
-## NOTE: This script will not run properly without populating "\\path" with appropriate UNC paths.
+## NOTE: This script will not run properly without populating $SharePath with the appropriate UNC path.
 ##
 ## Function was modified from this source:
 ## http://community.spiceworks.com/scripts/show/2502-network-bandwidth-test-test-networkspeed-ps1
