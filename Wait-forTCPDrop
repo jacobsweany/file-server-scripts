@@ -1,0 +1,46 @@
+<#
+.SYNOPSIS
+  Waits for a specified TCP connection to terminate.
+.DESCRIPTION
+  Waits for a specified TCP connection to terminate, but if termination does not occur in a specified amount of seconds,
+  ($TimeOutSeconds), loop will automatically terminate.
+  This function can be used in another script as a loop when given appropriate parameters, or be run standalone.
+.PARAMETER <Parameter_Name>
+    <TimeOutSeconds>
+    <RemotePort>
+    <CheckIPs>
+.INPUTS
+  None
+.OUTPUTS
+  None
+.NOTES
+  Version:        1.0
+  Author:         Jacob Sweany
+  Creation Date:  7/30/2018
+  Purpose/Change: Initial script development
+  
+.EXAMPLE
+  Wait-forTCPDrop -TimeOutSeconds 10 -RemotePort 445 -CheckIPs "1.2.3.4, 5.6.7.8" -Verbose
+    Will wait up to 10 seconds for TCP drop to occur, looking at remote port 445, check IPs 1.2.3.4 and 5.6.7.8, show verbose.
+#>
+
+function Wait-forTCPDrop {
+    [CmdletBinding()]
+    Param(
+    [int]$TimeOutSeconds,
+    [int]$RemotePort,
+    [array]$CheckIPs
+    )
+    $RunOutTimer = New-TimeSpan -Seconds $TimeOutSeconds
+    $Stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $Check = Get-NetTCPConnection -State Established -RemotePort $RemotePort -RemoteAddress $CheckIPs -ErrorAction SilentlyContinue
+    while ($Check.State -eq "Established") {
+        Write-Verbose "Waiting for TCP session for $($Check.RemoteAddress) port $($check.RemotePort) to drop. $($Stopwatch.Elapsed.Minutes) mins $($Stopwatch.Elapsed.Seconds) seconds elapsed."
+        if ($Stopwatch.Elapsed -ge $RunOutTimer) {
+            Write-Warning "$TimeOutSeconds seconds have elapsed. Giving up TCP drop window wait"
+            return
+        }
+        Start-Sleep -Seconds 1
+    }
+    $Stopwatch.Stop()
+}
