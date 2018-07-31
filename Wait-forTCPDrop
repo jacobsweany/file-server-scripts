@@ -33,14 +33,17 @@ function Wait-forTCPDrop {
     )
     $RunOutTimer = New-TimeSpan -Seconds $TimeOutSeconds
     $Stopwatch = [Diagnostics.Stopwatch]::StartNew()
-    $Check = Get-NetTCPConnection -State Established -RemotePort $RemotePort -RemoteAddress $CheckIPs -ErrorAction SilentlyContinue
+    $Check = Get-NetTCPConnection -State Established -RemotePort $RemotePort -RemoteAddress $CheckIPs -ErrorAction SilentlyContinue | select -Unique
     while ($Check.State -eq "Established") {
-        Write-Verbose "Waiting for TCP session for $($Check.RemoteAddress) port $($check.RemotePort) to drop. $($Stopwatch.Elapsed.Minutes) mins $($Stopwatch.Elapsed.Seconds) seconds elapsed."
+        $Check = Get-NetTCPConnection -State Established -RemotePort $RemotePort -RemoteAddress $CheckIPs -ErrorAction SilentlyContinue | select -Unique
+        Write-Verbose "Waiting for TCP session for $($Check.RemoteAddress | select -Unique) port $($check.RemotePort | select -Unique) to drop. $($Stopwatch.Elapsed.Minutes) mins $($Stopwatch.Elapsed.Seconds) seconds elapsed."
         if ($Stopwatch.Elapsed -ge $RunOutTimer) {
             Write-Warning "$TimeOutSeconds seconds have elapsed. Giving up TCP drop window wait"
             return
         }
         Start-Sleep -Seconds 1
     }
+    Write-Host "$($Stopwatch.Elapsed.Minutes) mins $($Stopwatch.Elapsed.Seconds) seconds elapsed total."
     $Stopwatch.Stop()
+    Remove-Variable -Name Check
 }
